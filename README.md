@@ -38,6 +38,17 @@ npm run test:smoke:boot
 npm run test:smoke:loop
 ```
 
+## Redeploy
+
+GitHub Actions cannot push `gh-pages` with the current OAuth scope. Publish from a machine that can push, without force-pushing `main`:
+
+```bash
+npm run build
+bash scripts/deploy-gh-pages.sh
+```
+
+That script builds `dist/` and updates the `gh-pages` branch only. Live URL: https://canop3n3r.github.io/space-samurai/
+
 ## Spec
 
 - [v1 design](docs/superpowers/specs/2026-11-04-space-samurai-v1-design.md)

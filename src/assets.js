@@ -1,136 +1,318 @@
 import * as THREE from 'three';
+import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 
-const loader = new OBJLoader();
 const cache = new Map();
 
-const NEON = {
+export const NEON = {
   cyan: 0x39f6ff,
   magenta: 0xff2bd6,
   chrome: 0xb8c4d8,
   dark: 0x12121f,
   orange: 0xff6a3d,
+  green: 0x3dff9a,
 };
 
-export function neonMat(color = NEON.cyan, emissiveIntensity = 0.85) {
+function kitBase() {
+  const base = (import.meta.env && import.meta.env.BASE_URL) || '/';
+  return `${base}assets/free/opengameart/space-kit/Models/`;
+}
+
+export function neonMat(color = NEON.cyan, emissiveIntensity = 1.6) {
   return new THREE.MeshStandardMaterial({
     color,
-    metalness: 0.7,
-    roughness: 0.25,
     emissive: color,
     emissiveIntensity,
+    metalness: 0.25,
+    roughness: 0.22,
+    toneMapped: false,
   });
 }
 
 export function chromeMat() {
   return new THREE.MeshStandardMaterial({
     color: NEON.chrome,
-    metalness: 0.95,
-    roughness: 0.18,
-    emissive: 0x223344,
-    emissiveIntensity: 0.2,
+    metalness: 0.92,
+    roughness: 0.2,
+    emissive: 0x1a3044,
+    emissiveIntensity: 0.18,
   });
 }
 
-export function applyNeon(root, tint = NEON.cyan) {
+function toStandard(material) {
+  if (!material) {
+    return new THREE.MeshStandardMaterial({ color: 0x8899aa, metalness: 0.4, roughness: 0.5 });
+  }
+  if (material.isMeshStandardMaterial) {
+    material.side = THREE.DoubleSide;
+    return material;
+  }
+  const std = new THREE.MeshStandardMaterial({
+    name: material.name || '',
+    color: material.color ? material.color.clone() : new THREE.Color(0xffffff),
+    map: material.map || null,
+    emissive: material.emissive ? material.emissive.clone() : new THREE.Color(0x000000),
+    emissiveMap: material.emissiveMap || null,
+    emissiveIntensity: material.emissiveIntensity || 0,
+    metalness: 0.42,
+    roughness: 0.46,
+    transparent: !!material.transparent,
+    opacity: material.opacity ?? 1,
+    side: THREE.DoubleSide,
+  });
+  if (std.map) {
+    std.emissiveMap = std.map;
+    std.emissive = new THREE.Color(0xffffff);
+    std.emissiveIntensity = Math.max(std.emissiveIntensity, 0.38);
+  }
+  const n = (std.name || '').toLowerCase();
+  if (n.includes('light') || n.includes('portal')) {
+    std.emissive = new THREE.Color(NEON.cyan);
+    std.emissiveIntensity = 1.15;
+    std.toneMapped = false;
+  } else if (n.includes('alien')) {
+    std.emissive = new THREE.Color(0x39ff9a);
+    std.emissiveIntensity = 0.85;
+  } else if (n === 'glass') {
+    std.transparent = true;
+    std.opacity = Math.min(std.opacity, 0.72);
+    std.emissive = new THREE.Color(0x183040);
+    std.emissiveIntensity = 0.35;
+    std.roughness = 0.12;
+    std.metalness = 0.1;
+  } else if (n === 'metal') {
+    std.metalness = 0.78;
+    std.roughness = 0.32;
+    std.emissive = new THREE.Color(0x3a1a10);
+    std.emissiveIntensity = 0.18;
+  } else if (n === 'rock') {
+    std.metalness = 0.08;
+    std.roughness = 0.92;
+    std.emissiveIntensity = 0.05;
+  }
+  return std;
+}
+
+function uniquifyMaterials(root) {
   root.traverse((o) => {
     if (!o.isMesh) return;
-    const base = o.material?.color ? o.material.color.getHex() : tint;
-    o.material = new THREE.MeshStandardMaterial({
-      color: base,
-      metalness: 0.65,
-      roughness: 0.35,
-      emissive: tint,
-      emissiveIntensity: 0.35,
-    });
-    o.castShadow = false;
-    o.receiveShadow = false;
+    if (Array.isArray(o.material)) o.material = o.material.map((m) => toStandard(m));
+    else o.material = toStandard(o.material);
   });
-  return root;
 }
 
-function loadObj(url) {
-  if (cache.has(url)) return cache.get(url);
-  const p = new Promise((resolve, reject) => {
-    loader.load(
-      url,
-      (obj) => resolve(obj),
+function loadTemplate(name) {
+  if (cache.has(name)) return cache.get(name);
+  const pending = new Promise((resolve, reject) => {
+    const manager = new THREE.LoadingManager();
+    let objResult = null;
+    let settled = false;
+    const finish = (err) => {
+      if (settled) return;
+      settled = true;
+      if (err || !objResult) reject(err || new Error(`missing ${name}`));
+      else resolve(objResult);
+    };
+    manager.onLoad = () => finish();
+    const base = kitBase();
+    const mtlLoader = new MTLLoader(manager);
+    mtlLoader.setPath(base);
+    mtlLoader.setResourcePath(base);
+    mtlLoader.setMaterialOptions({ side: THREE.DoubleSide });
+    mtlLoader.load(
+      `${name}.mtl`,
+      (materials) => {
+        materials.preload();
+        const objLoader = new OBJLoader(manager);
+        objLoader.setMaterials(materials);
+        objLoader.setPath(base);
+        objLoader.load(
+          `${name}.obj`,
+          (obj) => { objResult = obj; },
+          undefined,
+          (err) => finish(err),
+        );
+      },
       undefined,
-      (err) => reject(err),
+      (err) => finish(err),
     );
+    setTimeout(() => { if (objResult) finish(); }, 6000);
+  }).catch((err) => {
+    cache.delete(name);
+    throw err;
   });
-  cache.set(url, p);
-  return p;
+  cache.set(name, pending);
+  return pending;
 }
 
-const KIT = `${import.meta.env.BASE_URL}assets/free/opengameart/space-kit/Models`;
+function fitInner(inner, { height, maxSize, nose } = {}) {
+  inner.position.set(0, 0, 0);
+  inner.rotation.set(0, 0, 0);
+  inner.scale.set(1, 1, 1);
+  inner.updateWorldMatrix(true, true);
+  const raw = new THREE.Box3().setFromObject(inner);
+  const size = raw.getSize(new THREE.Vector3());
+  const limit = Math.max(size.x, size.y, size.z) || 1;
+  let s = 1;
+  if (height) s = height / (size.y || 1);
+  else if (maxSize) s = maxSize / limit;
+  inner.scale.setScalar(s);
+  if (nose) {
+    inner.updateWorldMatrix(true, true);
+    const glass = new THREE.Vector3();
+    let count = 0;
+    inner.traverse((o) => {
+      if (!o.isMesh) return;
+      const mats = [].concat(o.material);
+      if (!mats.some((m) => (m?.name || '').toLowerCase().includes('glass'))) return;
+      const c = new THREE.Vector3();
+      new THREE.Box3().setFromObject(o).getCenter(c);
+      glass.add(c);
+      count += 1;
+    });
+    if (count) {
+      glass.multiplyScalar(1 / count);
+      const mid = new THREE.Box3().setFromObject(inner).getCenter(new THREE.Vector3());
+      const dir = glass.sub(mid);
+      dir.y = 0;
+      if (dir.lengthSq() > 1e-4) {
+        const current = Math.atan2(dir.x, dir.z);
+        const target = nose === '+z' ? 0 : Math.PI;
+        inner.rotation.y = target - current;
+      }
+    }
+  }
+  inner.updateWorldMatrix(true, true);
+  const fitted = new THREE.Box3().setFromObject(inner);
+  const center = fitted.getCenter(new THREE.Vector3());
+  inner.position.x -= center.x;
+  inner.position.z -= center.z;
+  inner.position.y -= fitted.min.y;
+}
 
-export async function loadKitPart(name, { scale = 1, tint = NEON.cyan } = {}) {
+/**
+ * Load one Kenney Space Kit OBJ with its MTL colors and textures.
+ * The returned group is grounded and centered. `height` or `maxSize` is in meters.
+ * `nose` turns the glass centroid toward -Z (player craft) or +Z (lookAt enemies).
+ */
+export async function loadKitPart(name, opts = {}) {
   try {
-    const obj = await loadObj(`${KIT}/${name}.obj`);
-    const clone = obj.clone(true);
-    clone.scale.setScalar(scale);
-    applyNeon(clone, tint);
-    clone.name = name;
-    return clone;
-  } catch (e) {
-    console.warn('kit miss', name, e);
+    const template = await loadTemplate(name);
+    const inner = template.clone(true);
+    uniquifyMaterials(inner);
+    const wrapper = new THREE.Group();
+    wrapper.name = name;
+    wrapper.add(inner);
+    fitInner(inner, opts);
+    wrapper.userData.inner = inner;
+    return wrapper;
+  } catch (err) {
+    console.warn('kit miss', name, err);
     return null;
   }
 }
 
-export function placeholderCapsule({ color = NEON.chrome, height = 1.7, radius = 0.35 } = {}) {
-  const g = new THREE.Group();
-  const body = new THREE.Mesh(new THREE.CapsuleGeometry(radius, height - radius * 2, 4, 8), chromeMat());
-  body.position.y = height / 2;
-  g.add(body);
-  const blade = new THREE.Mesh(
-    new THREE.BoxGeometry(0.08, 1.05, 0.04),
-    neonMat(NEON.magenta, 1.4),
-  );
-  blade.position.set(0.45, height * 0.65, 0);
-  blade.name = 'blade';
-  g.add(blade);
-  g.userData.height = height;
-  return g;
-}
-
-export function placeholderDummy() {
-  const g = new THREE.Group();
-  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.18, 1.6, 8), chromeMat());
-  pole.position.y = 0.8;
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.28, 12, 10), neonMat(NEON.cyan, 0.5));
-  head.position.y = 1.7;
-  g.add(pole, head);
-  return g;
-}
-
-export function placeholderShip({ color = NEON.orange } = {}) {
-  const g = new THREE.Group();
-  const hull = new THREE.Mesh(new THREE.ConeGeometry(0.7, 2.4, 6), neonMat(color, 0.4));
-  hull.rotation.x = Math.PI / 2;
-  const wing = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.08, 0.7), chromeMat());
-  wing.position.z = 0.2;
-  const engine = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.35, 0.5, 8), neonMat(NEON.cyan, 1.2));
-  engine.rotation.x = Math.PI / 2;
-  engine.position.z = 1.15;
-  g.add(hull, wing, engine);
-  return g;
-}
-
-export function placeholderAsteroid(rng = Math.random) {
-  const geo = new THREE.IcosahedronGeometry(0.8 + rng() * 1.6, 0);
-  const mat = new THREE.MeshStandardMaterial({
-    color: 0x6a7080,
-    metalness: 0.2,
-    roughness: 0.85,
-    flatShading: true,
-    emissive: 0x1a2030,
-    emissiveIntensity: 0.15,
+export function punchKit(root, amount = 0.42) {
+  root.traverse((o) => {
+    if (!o.isMesh) return;
+    for (const m of [].concat(o.material)) {
+      if (!m?.color || !m.emissive) continue;
+      const name = (m.name || '').toLowerCase();
+      if (name === 'rock') {
+        m.emissive.copy(m.color).multiplyScalar(0.25);
+        m.emissiveIntensity = 0.2;
+        continue;
+      }
+      m.emissive.copy(m.color);
+      m.emissiveIntensity = Math.max(m.emissiveIntensity || 0, amount);
+    }
   });
-  const m = new THREE.Mesh(geo, mat);
-  m.scale.set(0.6 + rng(), 0.5 + rng(), 0.6 + rng());
-  return m;
 }
 
-export { NEON };
+export function tintMaterials(root, color, amount = 0.45) {
+  const target = new THREE.Color(color);
+  root.traverse((o) => {
+    if (!o.isMesh) return;
+    for (const m of [].concat(o.material)) {
+      if (m?.color) m.color.lerp(target, amount);
+    }
+  });
+}
+
+export function styleHologram(root, color = NEON.cyan) {
+  const c = new THREE.Color(color);
+  root.traverse((o) => {
+    if (!o.isMesh) return;
+    for (const m of [].concat(o.material)) {
+      if (!m) continue;
+      if (m.color) m.color.lerp(c, m.map ? 0.22 : 0.45);
+      if (m.emissive) {
+        m.emissive.copy(c);
+        m.emissiveIntensity = m.map ? 0.28 : 0.5;
+      }
+      if (m.map) m.emissiveMap = m.map;
+      m.transparent = true;
+      m.opacity = 0.97;
+      m.roughness = 0.25;
+      m.metalness = 0.15;
+    }
+  });
+}
+
+export function styleSaber(root, color = NEON.magenta) {
+  root.traverse((o) => {
+    if (!o.isMesh) return;
+    const next = [].concat(o.material).map((m) => {
+      const n = (m?.name || '').toLowerCase();
+      if (n.includes('alien') || n.includes('plant') || n.includes('blade')) {
+        return neonMat(color, 2.4);
+      }
+      if (n.includes('glass') || n.includes('grip')) {
+        return new THREE.MeshStandardMaterial({
+          name: 'grip',
+          color: 0x14141c,
+          metalness: 0.35,
+          roughness: 0.55,
+          emissive: 0x1a0610,
+          emissiveIntensity: 0.15,
+        });
+      }
+      return new THREE.MeshStandardMaterial({
+        name: 'guard',
+        color: 0xdbe7f2,
+        metalness: 0.88,
+        roughness: 0.18,
+        emissive: NEON.cyan,
+        emissiveIntensity: 0.55,
+      });
+    });
+    o.material = next.length === 1 ? next[0] : next;
+  });
+}
+
+export function setFlash(root, amount) {
+  root.traverse((o) => {
+    if (!o.isMesh) return;
+    for (const m of [].concat(o.material)) {
+      if (!m?.emissive) continue;
+      if (!m.userData.baseEm) {
+        m.userData.baseEm = m.emissive.clone();
+        m.userData.baseEmI = m.emissiveIntensity ?? 0;
+      }
+      if (amount > 0) {
+        m.emissive.set(0xffffff);
+        m.emissiveIntensity = 1.6;
+      } else {
+        m.emissive.copy(m.userData.baseEm);
+        m.emissiveIntensity = m.userData.baseEmI;
+      }
+    }
+  });
+}
+
+export function loadTexture(file) {
+  const tex = new THREE.TextureLoader().load(kitBase() + file);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  return tex;
+}

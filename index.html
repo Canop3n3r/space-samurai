@@ -10,12 +10,19 @@
   <body>
     <div id="app">
       <canvas id="game"></canvas>
+      <div id="fx"></div>
       <div id="hud">
-        <div id="prompt"></div>
-        <div id="stamina-wrap"><div id="stamina"></div></div>
-        <div id="lock-reticle" hidden></div>
         <div id="mode-badge">DOJO</div>
-        <div id="help">WASD move · Mouse look · LMB light · RMB heavy · Space dodge · Q lock · E interact/board · F fire (ship)</div>
+        <div id="hp-wrap" aria-label="Health"><div id="hp"></div></div>
+        <div id="prompt"></div>
+        <div id="target" hidden>
+          <span id="target-name">Target</span>
+          <div id="target-track"><div id="target-fill"></div></div>
+        </div>
+        <div id="lock-reticle" hidden></div>
+        <div id="crosshair"></div>
+        <div id="stamina-wrap" aria-label="Stamina"><div id="stamina"></div></div>
+        <div id="help">Click to look · WASD move · LMB light · RMB heavy · Space dodge · Q lock · E board</div>
       </div>
       <div id="touch" aria-hidden="true">
         <div id="stick" class="stick"><div id="stick-knob"></div></div>
@@ -24,8 +31,8 @@
           <button type="button" data-act="dodge">DODGE</button>
           <button type="button" data-act="heavy">HEAVY</button>
           <button type="button" data-act="light">LIGHT</button>
-          <button type="button" data-act="interact" class="wide">BOARD / USE</button>
           <button type="button" data-act="fire">FIRE</button>
+          <button type="button" data-act="interact" class="wide">BOARD</button>
         </div>
       </div>
     </div>
