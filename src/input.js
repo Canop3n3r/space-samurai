@@ -152,5 +152,14 @@ export function createInput(dom) {
   state._injectKey = (code, down = true) => onKey({ code, preventDefault() {}, target: document.body }, down);
   state._force = (flags) => Object.assign(state, flags);
 
-  return { ...state, update, consume, _state: state };
+  return {
+    move,
+    look,
+    update,
+    consume,
+    _state: state,
+    _keys: keys,
+    _injectKey: state._injectKey,
+    get usingStick() { return stickId != null; },
+  };
 }

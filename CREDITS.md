@@ -7,8 +7,13 @@ CC0 or CC-BY only. Placeholders fill gaps when a format is unavailable.
 ## 3D kits used
 
 - "Space Kit" by Kenney (https://opengameart.org/content/space-kit / https://kenney.nl/assets/space-kit), licensed under CC0 (https://creativecommons.org/publicdomain/zero/1.0/).
-  Used: spacecraft, rocks, modular buildings, astronaut, alien, barrels, consoles.
+  Used: spacecraft (`spaceCraft1`–`3`), rocks and meteors, modular buildings
+  (`buildingOpen`, `buildingCorner`, corridors, `frameHigh`, `metalStructure`),
+  `stationLarge`, `satelliteDish`, `portal`, astronaut, alien, robot, barrels,
+  consoles, `laserSabel` / `laserSabelOff`, `itemWeapon`, and the net / character textures.
   Files under `public/assets/free/opengameart/space-kit/`.
+  Loaded as OBJ + MTL so kit colors and textures stay intact. The player silhouette
+  is a composed neon samurai with the Kenney laser saber as the glow blade.
 
 ## Blade note
 

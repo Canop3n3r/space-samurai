@@ -1,6 +1,6 @@
 {
   "name": "space-samurai",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Neon cyber-samurai action game for the browser.",
   "main": "index.js",
   "directories": {
