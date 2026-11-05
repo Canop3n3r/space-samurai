@@ -5,3 +5,6 @@ dist/
 .vite/
 playwright-report/
 test-results/
+
+tmp-space-kit.zip
+CREDITS.generated.md
